@@ -1,52 +1,27 @@
-/**
- * Cloudflare Worker – Thailand VPS Proxy Node (GitHub Deploy Ready)
- * Author: ChatGPT
- * Purpose: Forward client requests through Thailand VPS node
- * Environment Variables:
- *   VPS_DOMAIN = your VPS domain (e.g., my.994471.xyz)
- *   VPS_PORT   = your VPS port (default 443)
- */
+export default {
+  async fetch(request) {
+    // === VPS Origin (direct server) ===
+    const upstream = "103.76.180.9";   // သင့် VPS IP
+    const upstream_port = 443;         // VLESS server port
+    const upstream_protocol = "https"; // http or https
 
-addEventListener('fetch', event => {
-  event.respondWith(handleRequest(event.request, event))
-})
-
-async function handleRequest(request, env) {
-  try {
-    // Fetch VPS environment variables
-    const VPS_DOMAIN = env.VPS_DOMAIN || 'my.994471.xyz';
-    const VPS_PORT = env.VPS_PORT || '443';
-
-    // Original request URL
+    // === Rewrite client request ===
     const url = new URL(request.url);
-    url.hostname = VPS_DOMAIN;
-    url.port = VPS_PORT;
+    url.hostname = upstream;
+    url.port = upstream_port;
 
-    // Create a new request to forward to VPS
-    const newRequest = new Request(url, {
+    // headers copy
+    let newHeaders = new Headers(request.headers);
+    newHeaders.set("Host", "my.994471.xyz"); // SNI/Host (domain)
+
+    const newRequest = new Request(url.toString(), {
       method: request.method,
-      headers: request.headers,
+      headers: newHeaders,
       body: request.body,
-      redirect: 'follow',
-      cf: {
-        // Cloudflare options
-        cacheEverything: true,
-        resolveOverride: VPS_DOMAIN
-      }
+      redirect: "manual"
     });
 
-    // Forward the request to VPS
-    const response = await fetch(newRequest);
-
-    // Return VPS response to client
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers
-    });
-
-  } catch (err) {
-    // Error handling
-    return new Response('Worker Error: ' + err.message, { status: 502 });
+    // === Fetch from VPS through Cloudflare ===
+    return fetch(newRequest);
   }
-}
+};
